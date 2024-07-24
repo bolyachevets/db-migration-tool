@@ -20,7 +20,7 @@ load_oc_db() {
   count_before=$(ls -1 | wc -l)
 
   # Extract files
-  gunzip $db_file
+  tar -xzvf $db_file
 
   # Count files after extraction
   count_after=$(ls -1 | wc -l)
