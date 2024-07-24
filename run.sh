@@ -6,17 +6,14 @@ load_oc_db() {
   pod_name=$(oc -n $namespace get pods --selector=$OC_LABEL -o name)
   prefix="pod/"
   pod_name=${pod_name#"$prefix"}
-  date=$(TZ=US/Pacific date +%Y-%m-%d)
-  src="${pod_name}://backups/daily/${date}/${POD_NAME}-${OC_ENV}-${db}_${date}_01-00-00.sql.gz"
+  src="${pod_name}://backups/daily/${DUMP_FILE_PATH}"
   db_file="${db}.sql.gz"
   oc -n $namespace cp $src $db_file
   if [ -e $db_file ]
   then
-      echo "downloaded successfully from daily backups"
+      echo "downloaded successfully from backups"
   else
-    src="${pod_name}://backups/monthly/${date}/${POD_NAME}-${OC_ENV}-${db}_${date}_01-00-00.sql.gz"
-    oc -n $namespace cp $src $db_file
-    echo "downloaded successfully from monthly backups"
+      echo "failed to successfully download from backups"
   fi
   gsutil cp $db_file "gs://${DB_BUCKET}/${db}/"
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
