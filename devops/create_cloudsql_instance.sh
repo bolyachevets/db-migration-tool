@@ -2,12 +2,13 @@
 
 # Variables
 TARGET_PROJECT_ID=""
-INSTANCE_NAME="auth-db"
-ENV="dev"
+INSTANCE_NAME="auth-db-try"
+ENV=""
+TAG=""
 REGION="northamerica-northeast1"
 BUCKET_NAME="auth-db-dump"
 OC_NAMESPACE=""
-HOST_PROJECT_ID=""
+HOST_PROJECT_ID="c4hnrd"
 DUMP_FILE="2024-07-26/postgresql-prod-auth-db_2024-07-26_01-00-00.sql.gz"
 DUMP_FILE="final_backup.sql"
 POSTGRES_VERSION="POSTGRES_15"
@@ -17,12 +18,12 @@ SHARED_VPC_NAME="bcr-vpc"
 # gcloud sql instances describe "${INSTANCE_NAME}-${ENV}" --project="${TARGET_PROJECT_ID}-${ENV}" > instance-config.json
 # gcloud run jobs describe db-migration-tool --project="gtksf3-dev" --format=json > job-config.json
 
-# enable Service Networking API
+gcloud services enable servicenetworking.googleapis.com --project="${TARGET_PROJECT_ID}-${ENV}"
 
 gcloud config set project "${TARGET_PROJECT_ID}-${ENV}"
 
 
-gcloud sql instances create "${INSTANCE_NAME}-${ENV}" \
+gcloud sql instances create "${INSTANCE_NAME}-${TAG}" \
     --database-version=$POSTGRES_VERSION \
     --region=$REGION \
     --storage-type=SSD \
@@ -38,9 +39,9 @@ gcloud sql instances create "${INSTANCE_NAME}-${ENV}" \
     --maintenance-window-day=MON \
     --maintenance-window-hour=4 \
     --backup-start-time=08:00 \
-    --network="projects/${HOST_PROJECT_ID}-${ENV}/global/networks/${SHARED_VPC_NAME}-${ENV}"
+    --network="projects/${HOST_PROJECT_ID}-${ENV}/global/networks/${SHARED_VPC_NAME}-${TAG}"
 
-gcloud sql instances patch "${INSTANCE_NAME}-${ENV}" \
+gcloud sql instances patch "${INSTANCE_NAME}-${TAG}" \
     --no-assign-ip
 
 gcloud projects add-iam-policy-binding ${PROJECT_ID} \
