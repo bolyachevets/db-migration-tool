@@ -18,7 +18,6 @@ SHARED_VPC_NAME="${SHARED_VPC_NAME}-${ENV}"
 TARGET_PROJECT_CLOUD_RUN_SERVICE_ACCOUNT="sa-api@${TARGET_PROJECT_ID}-${ENV}.iam.gserviceaccount.com"
 DATABASE_UNIX_SOCKET="cloudsql/${TARGET_PROJECT_ID}:${REGION}:auth-db-${ENV}"
 
-
 gcloud config set project $HOST_PROJECT_ID
 
 # enable Host APIS
@@ -132,7 +131,7 @@ for policy_file in "$ALERT_POLICIES_DIR"/*.yml; do
   policy_name=$(basename "$policy_file")
 
   echo "Processing $policy_name..."
-yy
+
   envsubst < "$policy_file" > alert_policy.yml
   gcloud alpha monitoring policies create --policy-from-file=alert_policy.yml
 
