@@ -1,22 +1,23 @@
 #!/bin/bash
 
-ENV=""
-TAG=""
-HOST_PROJECT_ID=""
-ARTIFACTORY_PROJECT_ID=$HOST_PROJECT_ID
-TARGET_PROJECT_ID=""
+# DEV
+ENV="dev"
+TAAG="dev"
+HOST_PROJECT_ID="c4hnrd"
+TARGET_PROJECT_ID="gtksf3"
 TARGET_PROJECT_CLOUD_RUN_SERVICE_AGENT=""
 CLOUD_RUN_NAME="auth-api"
 SHARED_VPC_NAME="bcr-vpc"
-SHARED_VPC_SUBNET="bcr-common-${TAG}-montreal"
+SHARED_VPC_SUBNET="bcr-common-${ENV}-montreal"
 REGION="northamerica-northeast1"
-SHARED_VPC_CONNECTOR="bcr-vpc-${TAG}-montreal"
+SHARED_VPC_CONNECTOR="bcr-vpc-${ENV}-montreal-con"
 HOST_PROJECT_ID="${HOST_PROJECT_ID}-${ENV}"
 TARGET_PROJECT_ID="${TARGET_PROJECT_ID}-${ENV}"
-CLOUD_RUN_NAME="${CLOUD_RUN_NAME}-${TAG}"
-SHARED_VPC_NAME="${SHARED_VPC_NAME}-${TAG}"
-TARGET_PROJECT_CLOUD_RUN_SERVICE_ACCOUNT="sa-api@${TARGET_PROJECT_ID}.iam.gserviceaccount.com"
-DATABASE_UNIX_SOCKET="cloudsql/${TARGET_PROJECT_ID}:${REGION}:auth-db-${TAG}"
+CLOUD_RUN_NAME="${CLOUD_RUN_NAME}-${ENV}"
+SHARED_VPC_NAME="${SHARED_VPC_NAME}-${ENV}"
+TARGET_PROJECT_CLOUD_RUN_SERVICE_ACCOUNT="sa-api@${TARGET_PROJECT_ID}-${ENV}.iam.gserviceaccount.com"
+DATABASE_UNIX_SOCKET="cloudsql/${TARGET_PROJECT_ID}:${REGION}:auth-db-${ENV}"
+
 
 gcloud config set project $HOST_PROJECT_ID
 
@@ -24,6 +25,7 @@ gcloud config set project $HOST_PROJECT_ID
 
 gcloud services enable vpcaccess.googleapis.com --project=$HOST_PROJECT_ID
 # gcloud services enable connectivity.googleapis.com --project=$HOST_PROJECT_ID
+
 
 # Shared VPC - manual
 
@@ -48,9 +50,16 @@ gcloud compute addresses create "${SHARED_VPC_NAME}-psc-range" \
     --network=$SHARED_VPC_NAME \
     --project=$HOST_PROJECT_ID
 
+# bigquery dataset for the log sink
+bq --location=$REGION mk \
+--dataset \
+--default_table_expiration=31536000 \
+${HOST_PROJECT_ID}:cloud_run_logs_${TAG}
+
+
 gcloud config set project $TARGET_PROJECT_ID
 
-# command line attach project to VPC
+command line attach project to VPC
 gcloud compute $SHARED_VPC_NAME associated-projects add $TARGET_PROJECT_ID \
     --host-project=$HOST_PROJECT_ID
 
@@ -66,15 +75,16 @@ gcloud services vpc-peerings connect \
 
 # permissions
 
-# gcloud projects add-iam-policy-binding $TARGET_PROJECT_ID \
-#     --member="serviceAccount:${HOST_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
-#     --role="roles/compute.viewer" --condition=None
-# gcloud projects add-iam-policy-binding $HOST_PROJECT_ID \
-#     --member="serviceAccount:${TARGET_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
-#    --role="roles/vpcaccess.user" --condition=None
-# gcloud projects add-iam-policy-binding $HOST_PROJECT_ID \
-#    --member="serviceAccount:${TARGET_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
-#    --role="roles/compute.viewer" --condition=None
+gcloud projects add-iam-policy-binding $TARGET_PROJECT_ID \
+    --member="serviceAccount:${HOST_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
+    --role="roles/compute.viewer" --condition=None
+
+gcloud projects add-iam-policy-binding $HOST_PROJECT_ID \
+    --member="serviceAccount:${TARGET_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
+   --role="roles/vpcaccess.user" --condition=None
+gcloud projects add-iam-policy-binding $HOST_PROJECT_ID \
+   --member="serviceAccount:${TARGET_PROJECT_CLOUD_RUN_SERVICE_AGENT}" \
+   --role="roles/compute.viewer" --condition=None
 
 
 
@@ -107,3 +117,31 @@ gcloud run deploy auth-api-$TAG \
   --set-env-vars=DEPLOYMENT_PLATFORM=GCP,DEPLOYMENT_ENV=development,DATABASE_USERNAME=auth,DATABASE_PORT=5432,DATABASE_NAME=auth-db,DATABASE_UNIX_SOCKET=$DATABASE_UNIX_SOCKET,DEPLOYMENT_PROJECT=$TARGET_PROJECT_ID \
   --add-cloudsql-instances="auth-db-${TAG}" \
   --cpu-boost
+
+# Create log sink
+gcloud logging sinks create cloud_run_errors_${TAG} \
+bigquery.googleapis.com/projects/${HOST_PROJECT_ID}/datasets/cloud_run_logs_${TAG} \
+--log-filter='resource.type="cloud_run_revision" AND severity="ERROR"' \
+--use-partitioned-tables
+
+export CLOUD_RUN_NAME
+
+ALERT_POLICIES_DIR="alert_policies"
+
+for policy_file in "$ALERT_POLICIES_DIR"/*.yml; do
+  policy_name=$(basename "$policy_file")
+
+  echo "Processing $policy_name..."
+yy
+  envsubst < "$policy_file" > alert_policy.yml
+  gcloud alpha monitoring policies create --policy-from-file=alert_policy.yml
+
+  if [ $? -eq 0 ]; then
+    echo "Successfully created alert policy from $policy_name."
+  else
+    echo "Failed to create alert policy from $policy_name."
+  fi
+
+  rm -f alert_policy.yml
+
+done
