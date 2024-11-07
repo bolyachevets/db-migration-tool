@@ -37,6 +37,18 @@ load_oc_db() {
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
   gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
+  touch user.sql
+
+  echo "GRANT USAGE, CREATE ON SCHEMA public TO $DB_USER;" >> user.sql
+  echo "GRANT ALL PRIVILEGES ON \"$DB_NAME\" TO $DB_USER;" >> user.sql
+  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO $DB_USER;" >> user.sql
+  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO $DB_USER;" >> user.sql
+  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO $DB_USER;" >> user.sql
+
+  gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=$DB_USER
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
+
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 }
