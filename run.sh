@@ -8,7 +8,7 @@ load_oc_db() {
   echo $pod_name
   prefix="pod/"
   pod_name=${pod_name#"$prefix"}
-  src="${pod_name}://backups/daily/${DUMP_FILE_PATH}"
+  src="${pod_name}:/backups/daily/${DUMP_FILE_PATH}"
   echo $src
   db_file="${db}.sql.gz"
   oc -n $namespace cp $src $db_file
