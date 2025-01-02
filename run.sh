@@ -10,9 +10,6 @@ load_oc_db() {
   pod_name=${pod_name#"$prefix"}
   src="${pod_name}:/backups/daily/${DUMP_FILE_PATH}"
   echo $src
-  oc -n $namespace exec $pod_name -- ls
-  oc -n $namespace exec $pod_name -- ls /backups
-  oc -n $namespace exec $pod_name -- ls /backups/daily
   db_file="${db}.sql.gz"
   oc -n $namespace cp $src $db_file
   if [ -e $db_file ]
