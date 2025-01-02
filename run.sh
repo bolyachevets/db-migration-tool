@@ -2,11 +2,14 @@
 
 load_oc_db() {
   local namespace="$1"
+  echo $namespace
   local db="$2"
   pod_name=$(oc -n $namespace get pods --selector=$OC_LABEL -o name)
+  echo $pod_name
   prefix="pod/"
   pod_name=${pod_name#"$prefix"}
   src="${pod_name}://backups/daily/${DUMP_FILE_PATH}"
+  echo $src
   db_file="${db}.sql.gz"
   oc -n $namespace cp $src $db_file
   if [ -e $db_file ]
