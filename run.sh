@@ -41,17 +41,25 @@ load_oc_db() {
 
   # Disable triggers on all tables
   echo "Disabling triggers on all tables..."
-  gcloud sql connect $GCP_SQL_INSTANCE --user=postgres --quiet <<EOF
-    DO \$\$ 
-    DECLARE
-        r RECORD;
-    BEGIN
-        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
-        LOOP
-            EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';
-        END LOOP;
-    END \$\$;
-EOF
+
+  touch trigger.sql
+
+  echo "EOF" >> trigger.sql
+  echo "DO \$\$" >> trigger.sql
+  echo "DECLARE" >> trigger.sql
+  echo "r RECORD;" >> trigger.sql
+  echo "BEGIN" >> trigger.sql
+  echo "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')" >> trigger.sql
+  echo "LOOP" >> trigger.sql
+  echo "EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';" >> trigger.sql
+  echo "END LOOP;" >> trigger.sql
+  echo "END \$\$;" >> trigger.sql
+  echo "EOF" >> trigger.sql
+
+  gsutil cp trigger.sql "gs://${DB_BUCKET}/${db}/"
+
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   touch user.sql
 
@@ -68,19 +76,22 @@ EOF
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-  # Re-enable triggers on all tables
-  echo "Re-enabling triggers on all tables..."
-  gcloud sql connect $GCP_SQL_INSTANCE --user=postgres --quiet <<EOF
-    DO \$\$ 
-    DECLARE
-        r RECORD;
-    BEGIN
-        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
-        LOOP
-            EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';
-        END LOOP;
-    END \$\$;
-EOF
+
+  echo "EOF" > trigger.sql
+  echo "DO \$\$" >> trigger.sql
+  echo "DECLARE" >> trigger.sql
+  echo "r RECORD;" >> trigger.sql
+  echo "BEGIN" >> trigger.sql
+  echo "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')" >> trigger.sql
+  echo "LOOP" >> trigger.sql
+  echo "EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';" >> trigger.sql
+  echo "END LOOP;" >> trigger.sql
+  echo "END \$\$;" >> trigger.sql
+  echo "EOF" >> trigger.sql
+
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
+
 }
 
 cd /opt/app-root
