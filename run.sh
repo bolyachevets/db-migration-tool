@@ -42,32 +42,30 @@ load_oc_db() {
   # Disable triggers on all tables
   echo "Disabling triggers on all tables..."
 
-  touch trigger.sql
-
-  echo "EOF" >> trigger.sql
-  echo "DO \$\$" >> trigger.sql
-  echo "DECLARE" >> trigger.sql
-  echo "r RECORD;" >> trigger.sql
-  echo "BEGIN" >> trigger.sql
-  echo "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')" >> trigger.sql
-  echo "LOOP" >> trigger.sql
-  echo "EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';" >> trigger.sql
-  echo "END LOOP;" >> trigger.sql
-  echo "END \$\$;" >> trigger.sql
-  echo "EOF" >> trigger.sql
+  cat <<EOF > trigger.sql
+DO \$\$
+DECLARE
+r RECORD;
+BEGIN
+FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+LOOP
+EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';
+END LOOP;
+END \$\$;
+EOF
 
   gsutil cp trigger.sql "gs://${DB_BUCKET}/${db}/"
 
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-  touch user.sql
-
-  echo "GRANT USAGE, CREATE ON SCHEMA public TO \"$DB_USER\";" >> user.sql
-  echo "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME\" TO \"$DB_USER\";" >> user.sql
-  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \"$DB_USER\";" >> user.sql
-  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \"$DB_USER\";" >> user.sql
-  echo "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO \"$DB_USER\";" >> user.sql
+  cat <<EOF > user.sql
+GRANT USAGE, CREATE ON SCHEMA public TO "$DB_USER";
+GRANT ALL PRIVILEGES ON DATABASE "$DB_NAME" TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
+EOF
 
   gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
@@ -76,18 +74,17 @@ load_oc_db() {
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-
-  echo "EOF" > trigger.sql
-  echo "DO \$\$" >> trigger.sql
-  echo "DECLARE" >> trigger.sql
-  echo "r RECORD;" >> trigger.sql
-  echo "BEGIN" >> trigger.sql
-  echo "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')" >> trigger.sql
-  echo "LOOP" >> trigger.sql
-  echo "EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';" >> trigger.sql
-  echo "END LOOP;" >> trigger.sql
-  echo "END \$\$;" >> trigger.sql
-  echo "EOF" >> trigger.sql
+  cat <<EOF > trigger.sql
+DO \$\$
+DECLARE
+r RECORD;
+BEGIN
+FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+LOOP
+EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';
+END LOOP;
+END \$\$;
+EOF
 
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
