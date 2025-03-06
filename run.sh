@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e  # Exit immediately if any command fails
 
 load_oc_db() {
   local namespace="$1"
@@ -19,7 +18,7 @@ load_oc_db() {
 
   # Download the database dump file
   db_file="${db}.sql.gz"
-  oc -n $namespace cp $src $db_file || { echo "Failed to copy file from pod"; exit 1; }
+  oc -n $namespace cp $src $db_file
 
   if [ -e $db_file ]; then
     echo "Database dump downloaded successfully"
@@ -32,7 +31,7 @@ load_oc_db() {
   count_before=$(ls -1 | wc -l)
 
   # Extract the database dump
-  tar -xzvf $db_file || { echo "Failed to extract file"; exit 1; }
+  tar -xzvf $db_file
 
   # Count files after extraction
   count_after=$(ls -1 | wc -l)
@@ -46,11 +45,11 @@ load_oc_db() {
   fi
 
   # Upload the database dump to Google Cloud Storage
-  gsutil cp $db_file "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload to GCS"; exit 1; }
+  gsutil cp $db_file "gs://${DB_BUCKET}/${db}/"
 
   # Delete and recreate the database
-  gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE || { echo "Failed to delete database"; exit 1; }
-  gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE || { echo "Failed to create database"; exit 1; }
+  gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
+  gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
   # Disable foreign key checks
   echo "Disabling foreign key checks..."
@@ -58,9 +57,9 @@ load_oc_db() {
 SET session_replication_role = replica;
 EOF
 
-  gsutil cp disable_fk.sql "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload disable_fk.sql"; exit 1; }
+  gsutil cp disable_fk.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/disable_fk.sql" --database=$DB_NAME --user=postgres || { echo "Failed to disable foreign key checks"; exit 1; }
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/disable_fk.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   # Grant permissions to the database user
@@ -72,13 +71,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO "
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
 EOF
 
-  gsutil cp user.sql "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload user.sql"; exit 1; }
+  gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres || { echo "Failed to grant user permissions"; exit 1; }
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   # Import the database dump
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER || { echo "Failed to import database"; exit 1; }
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   # Re-enable foreign key checks
@@ -87,17 +86,17 @@ EOF
 SET session_replication_role = origin;
 EOF
 
-  gsutil cp enable_fk.sql "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload enable_fk.sql"; exit 1; }
+  gsutil cp enable_fk.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/enable_fk.sql" --database=$DB_NAME --user=postgres || { echo "Failed to re-enable foreign key checks"; exit 1; }
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/enable_fk.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 }
 
 # Change to the working directory
-cd /opt/app-root || { echo "Failed to change directory"; exit 1; }
+cd /opt/app-root
 
 # Log in to OpenShift
-oc login --server=$OC_SERVER --token=$OC_TOKEN || { echo "Failed to log in to OpenShift"; exit 1; }
+oc login --server=$OC_SERVER --token=$OC_TOKEN
 
 # Load the database
 load_oc_db $OC_NAMESPACE $DB_NAME
