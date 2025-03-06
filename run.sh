@@ -51,17 +51,6 @@ load_oc_db() {
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
   gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
-  # Disable foreign key checks
-  echo "Disabling foreign key checks..."
-  cat <<EOF > disable_fk.sql
-SET session_replication_role = replica;
-EOF
-
-  gsutil cp disable_fk.sql "gs://${DB_BUCKET}/${db}/"
-
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/disable_fk.sql" --database=$DB_NAME --user=postgres
-  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
-
   # Grant permissions to the database user
   cat <<EOF > user.sql
 GRANT USAGE, CREATE ON SCHEMA public TO "$DB_USER";
@@ -80,16 +69,7 @@ EOF
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-  # Re-enable foreign key checks
-  echo "Re-enabling foreign key checks..."
-  cat <<EOF > enable_fk.sql
-SET session_replication_role = origin;
-EOF
 
-  gsutil cp enable_fk.sql "gs://${DB_BUCKET}/${db}/"
-
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/enable_fk.sql" --database=$DB_NAME --user=postgres
-  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 }
 
 # Change to the working directory
