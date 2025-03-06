@@ -39,24 +39,14 @@ load_oc_db() {
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
   gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
-  # Disable triggers on all tables
-  echo "Disabling triggers on all tables..."
+  echo "Disabling foreign key checks..."
+  cat <<EOF > disable_fk.sql
+  SET session_replication_role = replica;
+  EOF
 
-  cat <<EOF > trigger.sql
-DO \$\$
-DECLARE
-r RECORD;
-BEGIN
-FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
-LOOP
-EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';
-END LOOP;
-END \$\$;
-EOF
+  gsutil cp disable_fk.sql "gs://${DB_BUCKET}/${db}/"
 
-  gsutil cp trigger.sql "gs://${DB_BUCKET}/${db}/"
-
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/disable_fk.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   cat <<EOF > user.sql
@@ -74,19 +64,14 @@ EOF
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-  cat <<EOF > trigger.sql
-DO \$\$
-DECLARE
-r RECORD;
-BEGIN
-FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
-LOOP
-EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';
-END LOOP;
-END \$\$;
-EOF
+  echo "Re-enabling foreign key checks..."
+  cat <<EOF > enable_fk.sql
+  SET session_replication_role = origin;
+  EOF
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/trigger.sql" --database=$DB_NAME --user=postgres
+  gsutil cp enable_fk.sql "gs://${DB_BUCKET}/${db}/"
+
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/enable_fk.sql" --database=$DB_NAME --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
 }
