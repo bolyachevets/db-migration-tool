@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 
 load_oc_db() {
   local namespace="$1"
@@ -12,8 +12,7 @@ load_oc_db() {
   echo $src
   db_file="${db}.sql.gz"
   oc -n $namespace cp $src $db_file
-  if [ -e $db_file ]
-  then
+  if [ -e $db_file ]; then
       echo "downloaded successfully from backups"
   else
       echo "failed to successfully download from backups"
@@ -40,6 +39,20 @@ load_oc_db() {
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
   gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
+  # Disable triggers on all tables
+  echo "Disabling triggers on all tables..."
+  gcloud sql connect $GCP_SQL_INSTANCE --user=postgres --quiet <<EOF
+    DO \$\$ 
+    DECLARE
+        r RECORD;
+    BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
+        LOOP
+            EXECUTE 'ALTER TABLE public.' || r.tablename || ' DISABLE TRIGGER ALL';
+        END LOOP;
+    END \$\$;
+EOF
+
   touch user.sql
 
   echo "GRANT USAGE, CREATE ON SCHEMA public TO \"$DB_USER\";" >> user.sql
@@ -54,6 +67,20 @@ load_oc_db() {
 
   gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
+
+  # Re-enable triggers on all tables
+  echo "Re-enabling triggers on all tables..."
+  gcloud sql connect $GCP_SQL_INSTANCE --user=postgres --quiet <<EOF
+    DO \$\$ 
+    DECLARE
+        r RECORD;
+    BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') 
+        LOOP
+            EXECUTE 'ALTER TABLE public.' || r.tablename || ' ENABLE TRIGGER ALL';
+        END LOOP;
+    END \$\$;
+EOF
 }
 
 cd /opt/app-root
