@@ -30,8 +30,15 @@ load_oc_db() {
   # Count files before extraction
   count_before=$(ls -1 | wc -l)
 
-  # Extract the database dump
-  tar -xzvf $db_file
+  # Detect if the file is a tar archive or a gzip-compressed file
+  if tar -tf "$db_file" >/dev/null 2>&1; then
+    echo "Extracting TAR.GZ archive..."
+    tar -xzvf "$db_file"
+  else
+    echo "Extracting GZ file..."
+    gunzip "$db_file"
+    db_file="${db}.sql"  # Update filename after extraction
+  fi
 
   # Count files after extraction
   count_after=$(ls -1 | wc -l)
