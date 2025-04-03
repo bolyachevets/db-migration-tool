@@ -34,10 +34,6 @@ load_oc_db() {
   if tar -tf "$db_file" >/dev/null 2>&1; then
     echo "Extracting TAR.GZ archive..."
     tar -xzvf "$db_file"
-  else
-    echo "Extracting GZ file..."
-    gunzip "$db_file"
-    db_file="${db}.sql"  # Update filename after extraction
   fi
 
   # Count files after extraction
