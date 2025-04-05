@@ -24,25 +24,16 @@ load_oc_db() {
     [ -f "backup.sql" ] && db_file="backup.sql"
   fi
 
-  # Upload to GCS
   echo "Uploading to GCS..."
   gsutil cp "$db_file" "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload to GCS"; exit 1; }
 
-  # Database operations
   echo "Recreating database $db on instance $GCP_SQL_INSTANCE"
   gcloud sql databases delete "$db" --instance="$GCP_SQL_INSTANCE" --quiet || echo "Database may not exist yet"
   gcloud sql databases create "$db" --instance="$GCP_SQL_INSTANCE" --quiet || { echo "Failed to create database"; exit 1; }
 
-  # Import data (using the admin user)
   echo "Importing data..."
-  gcloud sql import sql "$GCP_SQL_INSTANCE" "gs://${DB_BUCKET}/${db}/${db_file}" \
-    --database="$db" --user=$DB_USER \
-    --quiet || { echo "Failed to import data"; exit 1; }
-
-  # Wait for operation to complete
-  operation=$(gcloud sql operations list --instance="$GCP_SQL_INSTANCE" \
-    --filter='status!=DONE' --format='value(name)' --limit=1)
-  [ -n "$operation" ] && gcloud sql operations wait "$operation" --timeout=unlimited
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database="$db" --user=$DB_USER
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   # Grant permissions to the database user
   cat <<EOF > user.sql
