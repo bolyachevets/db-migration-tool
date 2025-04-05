@@ -44,18 +44,19 @@ load_oc_db() {
     --filter='status!=DONE' --format='value(name)' --limit=1)
   [ -n "$operation" ] && gcloud sql operations wait "$operation" --timeout=unlimited
 
-  # Set permissions using direct SQL connection (better approach)
-  echo "Setting permissions for user $DB_USER"
-  gcloud sql connect "$GCP_SQL_INSTANCE" --user=postgres --quiet <<EOF
-  \c $db;
-  GRANT USAGE, CREATE ON SCHEMA public TO "$DB_USER";
-  GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$DB_USER";
-  GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$DB_USER";
-  GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO "$DB_USER";
-  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO "$DB_USER";
-  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO "$DB_USER";
-  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
+  # Grant permissions to the database user
+  cat <<EOF > user.sql
+GRANT USAGE, CREATE ON SCHEMA public TO "$DB_USER";
+GRANT ALL PRIVILEGES ON DATABASE "$DB_NAME" TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO "$DB_USER";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
 EOF
+
+  gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
+
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   echo "Database load completed successfully"
 }
