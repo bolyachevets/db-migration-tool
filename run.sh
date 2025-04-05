@@ -36,7 +36,7 @@ load_oc_db() {
   # Import data (using the admin user)
   echo "Importing data..."
   gcloud sql import sql "$GCP_SQL_INSTANCE" "gs://${DB_BUCKET}/${db}/${db_file}" \
-    --database="$db" \
+    --database="$db" --user=$DB_USER \
     --quiet || { echo "Failed to import data"; exit 1; }
 
   # Wait for operation to complete
