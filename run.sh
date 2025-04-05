@@ -52,7 +52,7 @@ load_oc_db() {
 
   # Delete and recreate the database
   gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
-  gcloud sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
+  gcloud --quiet sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
 
   # Grant permissions to the database user
   cat <<EOF > user.sql
@@ -65,14 +65,12 @@ EOF
 
   gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
-  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=postgres
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='status!=DONE' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   # Import the database dump
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME --user=$DB_USER
-  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
-
-
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME
+  gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='status!=DONE' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 }
 
 # Change to the working directory
