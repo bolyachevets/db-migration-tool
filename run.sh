@@ -57,8 +57,6 @@ load_oc_db() {
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
 EOF
 
-  # Cleanup
-  rm -f "$db_file" "backup.sql" 2>/dev/null
   echo "Database load completed successfully"
 }
 
