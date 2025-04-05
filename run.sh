@@ -51,26 +51,33 @@ load_oc_db() {
   gsutil cp $db_file "gs://${DB_BUCKET}/${db}/"
 
   # Delete and recreate the database
-  gcloud --quiet sql databases delete $DB_NAME --instance=$GCP_SQL_INSTANCE
-  gcloud --quiet sql databases create $DB_NAME --instance=$GCP_SQL_INSTANCE
+  gcloud --quiet sql databases delete $db --instance=$GCP_SQL_INSTANCE
+  gcloud --quiet sql databases create $db --instance=$GCP_SQL_INSTANCE
 
   # Grant permissions to the database user
-  cat <<EOF > user.sql
+  # First create a temporary file with the SQL commands
+  cat <<EOF > grant_permissions.sql
 GRANT USAGE, CREATE ON SCHEMA public TO "$DB_USER";
-GRANT ALL PRIVILEGES ON DATABASE "$DB_NAME" TO "$DB_USER";
+GRANT ALL PRIVILEGES ON DATABASE "$db" TO "$DB_USER";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO "$DB_USER";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO "$DB_USER";
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO "$DB_USER";
 EOF
 
-  gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
+  # Upload the permissions file to GCS
+  gsutil cp grant_permissions.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=postgres
+  # Import the permissions (must use postgres database for these commands)
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/grant_permissions.sql" --database=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='status!=DONE' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
-  # Import the database dump
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$DB_NAME
+  # Import the actual database data
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database=$db
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='status!=DONE' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
+
+  # Clean up temporary files
+  rm -f grant_permissions.sql
+  rm -f $db_file
 }
 
 # Change to the working directory
