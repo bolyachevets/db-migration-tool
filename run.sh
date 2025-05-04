@@ -53,6 +53,14 @@ EOF
 }
 
 # Main execution
-cd /opt/app-root || exit 1
+if [ -d "/opt/app-root" ]; then
+  cd /opt/app-root || exit 1
+fi
+
+if [ -n "$GCP_ENV" ]; then
+  echo "Setting gcloud project to $GCP_ENV"
+  gcloud config set project "$GCP_ENV" || { echo "Failed to set gcloud project"; exit 1; }
+fi
+
 oc login --server="$OC_SERVER" --token="$OC_TOKEN" || { echo "OC login failed"; exit 1; }
 load_oc_db "$OC_NAMESPACE" "$DB_NAME"
