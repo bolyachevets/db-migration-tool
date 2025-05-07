@@ -27,9 +27,9 @@ load_oc_db() {
   echo "Uploading to GCS..."
   gsutil cp "$db_file" "gs://${DB_BUCKET}/${db}/" || { echo "Failed to upload to GCS"; exit 1; }
 
-  echo "Recreating database $db on instance $GCP_SQL_INSTANCE"
-  gcloud sql databases delete "$db" --instance="$GCP_SQL_INSTANCE" --quiet || echo "Database may not exist yet"
-  gcloud sql databases create "$db" --instance="$GCP_SQL_INSTANCE" --quiet || { echo "Failed to create database"; exit 1; }
+  echo "Recreating database $DB_NAME_NEW on instance $GCP_SQL_INSTANCE"
+  gcloud sql databases delete "$DB_NAME_NEW" --instance="$GCP_SQL_INSTANCE" --quiet || echo "Database may not exist yet"
+  gcloud sql databases create "$DB_NAME_NEW" --instance="$GCP_SQL_INSTANCE" --quiet || { echo "Failed to create database"; exit 1; }
 
 #set user permissions
 cat <<EOF > user.sql
@@ -50,12 +50,12 @@ EOF
 
   gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME_NEW --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
 
   echo "Importing data..."
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database="$db" --user=postgres
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/${db_file}" --database="$DB_NAME_NEW" --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
 
@@ -70,7 +70,7 @@ EOF
 
   gsutil cp user.sql "gs://${DB_BUCKET}/${db}/"
 
-  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME --user=postgres
+  gcloud --quiet sql import sql $GCP_SQL_INSTANCE "gs://${DB_BUCKET}/${db}/user.sql" --database=$DB_NAME_NEW --user=postgres
   gcloud sql operations list --instance=$GCP_SQL_INSTANCE --filter='NOT status:done' --format='value(name)' | xargs -r gcloud sql operations wait --timeout=unlimited
 
   echo "Database load completed successfully"
